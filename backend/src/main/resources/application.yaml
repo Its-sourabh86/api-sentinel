@@ -58,4 +58,4 @@ sentinel:
     login-email-per-minute: 5
     register-ip-per-hour: 5
   cors:
-    allowed-origins: ${SENTINEL_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-origins: ${SENTINEL_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
