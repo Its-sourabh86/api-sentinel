@@ -1,0 +1,15 @@
+package com.apisentinel.enums;
+
+public enum FailureCode {
+    TIMEOUT,
+    CONNECTION_FAILED,
+    INVALID_URL,
+    RESPONSE_TOO_LARGE,
+    PROBE_ERROR,
+    STATUS_MISMATCH,
+    INVALID_JSON,
+    JSON_ASSERTION_FAILED,
+    STALE_DATA,
+    SCHEMA_VIOLATION,
+    BLOCKED_TARGET
+}

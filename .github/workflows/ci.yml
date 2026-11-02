@@ -1,0 +1,60 @@
+name: API Sentinel CI
+
+# 1. TRIGGER: Kab chalega?
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # 2. JOB 1: BACKEND CI (Java 21 + Maven Tests)
+  backend-test:
+    name: Backend Tests & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step A: Code download karo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step B: Java 21 install karo
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      # Step C: Backend folder me Maven tests run karo
+      - name: Run Maven Tests
+        working-directory: ./backend
+        run: mvn -B test
+
+  # 3. JOB 2: FRONTEND CI (Node 22 + TypeScript Build)
+  frontend-build:
+    name: Frontend Build & Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step A: Code download karo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step B: Node.js 22 install karo
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # Step C: Dependencies install karo
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      # Step D: TypeScript typecheck aur Vite production build run karo
+      - name: Build Frontend (Typecheck & Vite)
+        working-directory: ./frontend
+        run: npm run build

@@ -1,0 +1,50 @@
+services:
+  # 1. Database Service
+  postgres:
+    image: postgres:16
+    container_name: sentinel-postgres
+    environment:
+      POSTGRES_DB: sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # 2. Spring Boot Backend Service (Java 21)
+  backend:
+    build: ./backend
+    container_name: sentinel-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/sentinel
+      DB_USERNAME: sentinel
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-sentinel123}
+      SENTINEL_JWT_SECRET: ${SENTINEL_JWT_SECRET:-q8Xv2mL9pR4tY7kN3wF6aB1cD5eG0hJ2sK8nM4zP6uA=}
+      SENTINEL_WEBHOOK_SECRET: ${SENTINEL_WEBHOOK_SECRET:-dev-only-secret}
+      SENTINEL_ALLOW_PRIVATE_TARGETS: "true"
+      SENTINEL_SCHEDULER_ENABLED: "true"
+      SPRING_JPA_SHOW_SQL: "false"
+
+  # 3. React Frontend Service (Nginx)
+  frontend:
+    build: ./frontend
+    container_name: sentinel-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:

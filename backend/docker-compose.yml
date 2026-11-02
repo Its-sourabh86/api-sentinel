@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: sentinel-postgres
+    environment:
+      POSTGRES_DB: sentinel
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    container_name: sentinel-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/sentinel
+      DB_USERNAME: sentinel
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SENTINEL_WEBHOOK_SECRET: ${SENTINEL_WEBHOOK_SECRET}
+      SENTINEL_JWT_SECRET: ${SENTINEL_JWT_SECRET:?set SENTINEL_JWT_SECRET in .env}
+      SENTINEL_ALLOW_PRIVATE_TARGETS: "true"
+      SPRING_JPA_SHOW_SQL: "true"
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: DEBUG
+      SENTINEL_SCHEDULER_ENABLED: "false"
+
+volumes:
+  pgdata:

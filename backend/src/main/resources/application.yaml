@@ -1,0 +1,61 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: api-sentinel
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sentinel}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:mr.cs193}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.apisentinel: DEBUG
+  pattern:
+    level: "%5p [monitorId=%X{monitorId:-}]"
+
+sentinel:
+  mock:
+    enabled: true
+  scheduler:
+    enabled: true
+    tick-ms: 5000
+    batch-size: 50
+    worker-threads: 10
+    queue-capacity: 100
+  incident:
+    failure-threshold: 3
+    recovery-threshold: 2
+  notification:
+    enabled: true
+    webhook-url: ${SENTINEL_WEBHOOK_URL:http://localhost:8081/mock/webhook}
+    webhook-secret: ${SENTINEL_WEBHOOK_SECRET:dev-only-secret}
+    timeout-ms: 5000
+    max-attempts: 3
+    retry-backoff-ms: 1000
+  security:
+    ssrf:
+      allow-private-targets: ${SENTINEL_ALLOW_PRIVATE_TARGETS:true}
+      max-redirects: 3
+  jwt:
+    secret: ${SENTINEL_JWT_SECRET:q8Xv2mL9pR4tY7kN3wF6aB1cD5eG0hJ2sK8nM4zP6uA=}
+    expiry-minutes: 60
+  
+  ratelimit:
+    enabled: true
+    login-ip-per-minute: 10
+    login-email-per-minute: 5
+    register-ip-per-hour: 5
+  cors:
+    allowed-origins: ${SENTINEL_CORS_ALLOWED_ORIGINS:http://localhost:5173}
