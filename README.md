@@ -123,4 +123,21 @@ docker compose up --build
 Access the dashboard at:
 👉 **`http://localhost:3000`**
 
+---
 
+<!-- ## 💼 Resume Bullets (Ready to Paste)
+
+* *Built **API Sentinel**, an end-to-end API failure detection platform in **Java 21, Spring Boot 3, and React 19**, detecting silent payload errors beyond HTTP status codes using JSONPath and JSON Schema validations.*
+* *Engineered an **SSRF Defense-in-Depth pipeline** validating resolved IPs against loopback, RFC1918, and link-local cloud metadata endpoints (169.254.169.254) across multi-hop redirects with strict time budgets.*
+* *Designed an **idempotent incident engine** with `SELECT ... FOR UPDATE` row locks, state-machine deduplication, and `AFTER_COMMIT` event listeners dispatching **HMAC-SHA256 signed** webhook alerts with exponential backoff.*
+* *Architected a multi-stage **Docker Compose** containerization pipeline with an **Nginx reverse proxy** and automated **GitHub Actions CI** for parallel multi-tier testing.* -->
+
+## 📊 Performance Benchmarks (k6 Load Test)
+
+Tested with **50 concurrent virtual users** executing authenticated read/write load against PostgreSQL:
+- **Throughput:** ~930 requests/second (55,829 total requests in 1 minute)
+- **Failure Rate:** **0.00%** (Zero dropped requests or connection timeouts)
+- **Latency (Avg / p95):** 53.4 ms / 119.0 ms
+- **Scheduler Throughput:** Sustained 600 checks/minute across 200 active monitors with zero queue overflow.
+
+*(Detailed benchmark methodology documented in [`backend/docs/load-test-results.md`](backend/docs/load-test-results.md))*
