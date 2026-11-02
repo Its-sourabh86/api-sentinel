@@ -5,7 +5,7 @@ import { updateMonitor } from '../api/monitors';
 import type { HttpMethod, Monitor } from '../api/types';
 
 const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'];
-const INPUT = 'w-full rounded border border-slate-300 p-2 text-sm disabled:bg-slate-100';
+const INPUT = 'w-full rounded-lg bg-[#0E1422] border border-slate-700 p-2.5 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50';
 
 interface Props {
   monitor: Monitor;
@@ -73,15 +73,17 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
       if (e instanceof ApiError && e.status === 400) {
         if (e.violations.length > 0) {
           const mapped: Record<string, string> = {};
-          e.violations.forEach((v) => { mapped[v.field] = v.message; });
+          e.violations.forEach((v) => {
+            mapped[v.field] = v.message;
+          });
           setErrors(mapped);
         } else {
-          setErrors({ url: e.message });
+          setFormError(e.message);
         }
       } else if (e instanceof ApiError && e.status === 429) {
-        setFormError(`Too many requests. Try again in ${e.retryAfterSeconds ?? 'a few'} seconds.`);
+        setFormError(`Rate limited. Try again in ${e.retryAfterSeconds ?? 'a few'} seconds.`);
       } else {
-        setFormError('Could not update monitor. Please try again.');
+        setFormError('Failed to update monitor configuration.');
       }
     } finally {
       setSubmitting(false);
@@ -89,22 +91,24 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
-        <div className="flex items-center justify-between pb-3 border-b">
-          <h2 className="text-lg font-bold text-slate-900">Edit Monitor</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in font-mono">
+      <div className="w-full max-w-lg rounded-xl bg-[#111827] border border-slate-700/80 p-6 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <span className="text-indigo-400">⚙</span> Edit Target Configuration
+          </h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+            className="text-slate-400 hover:text-white transition-colors"
           >
-            &times;
+            ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4" noValidate>
           <div>
-            <label className="block text-sm font-medium text-slate-800">
-              Name
+            <label className="block text-xs font-semibold text-slate-400 uppercase">
+              Target Name
               <input
                 className={`${INPUT} mt-1`}
                 value={name}
@@ -112,24 +116,24 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
                 onChange={(e) => setName(e.target.value)}
               />
             </label>
-            {errors.name && <p className="mt-1 text-xs text-red-700">{errors.name}</p>}
+            {errors.name && <p className="mt-1 text-xs text-rose-400">{errors.name}</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-800">
-              URL
+            <label className="block text-xs font-semibold text-slate-400 uppercase">
+              Target URL
               <input
                 className={`${INPUT} mt-1`}
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
               />
             </label>
-            {errors.url && <p className="mt-1 text-xs text-red-700">{errors.url}</p>}
+            {errors.url && <p className="mt-1 text-xs text-rose-400">{errors.url}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
-              <label className="block text-xs font-medium text-slate-700">
+              <label className="block text-xs font-semibold text-slate-400 uppercase">
                 Method
                 <select
                   className={`${INPUT} mt-1`}
@@ -144,7 +148,7 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700">
+              <label className="block text-xs font-semibold text-slate-400 uppercase">
                 Interval (s)
                 <input
                   className={`${INPUT} mt-1`}
@@ -154,12 +158,12 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
                 />
               </label>
               {errors.intervalSeconds && (
-                <p className="mt-1 text-xs text-red-700">{errors.intervalSeconds}</p>
+                <p className="mt-1 text-xs text-rose-400">{errors.intervalSeconds}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700">
+              <label className="block text-xs font-semibold text-slate-400 uppercase">
                 Timeout (ms)
                 <input
                   className={`${INPUT} mt-1`}
@@ -169,13 +173,13 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
                 />
               </label>
               {errors.timeoutMs && (
-                <p className="mt-1 text-xs text-red-700">{errors.timeoutMs}</p>
+                <p className="mt-1 text-xs text-rose-400">{errors.timeoutMs}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700">
-                Expected HTTP
+              <label className="block text-xs font-semibold text-slate-400 uppercase">
+                HTTP Status
                 <input
                   className={`${INPUT} mt-1`}
                   value={expectedStatus}
@@ -184,28 +188,28 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
                 />
               </label>
               {errors.expectedStatus && (
-                <p className="mt-1 text-xs text-red-700">{errors.expectedStatus}</p>
+                <p className="mt-1 text-xs text-rose-400">{errors.expectedStatus}</p>
               )}
             </div>
           </div>
 
-          {formError && <p className="text-sm text-red-700">{formError}</p>}
+          {formError && <p className="text-xs text-rose-400">{formError}</p>}
 
-          <div className="flex justify-end gap-3 pt-3 border-t">
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Save changes'}
+              {submitting ? 'Saving...' : 'Apply Changes'}
             </button>
           </div>
         </form>
@@ -213,4 +217,3 @@ export default function EditMonitorModal({ monitor, onClose, onSuccess }: Props)
     </div>
   );
 }
-

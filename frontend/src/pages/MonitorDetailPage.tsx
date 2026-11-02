@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -28,6 +28,7 @@ import {
 } from '../api/monitors';
 import type { AssertionOperator } from '../api/types';
 import EditMonitorModal from '../components/EditMonitorModal';
+import RadialGauge from '../components/RadialGauge';
 import { failureLabel } from '../lib/labels';
 import { percentile } from '../lib/stats';
 import { formatDateTime, timeAgo } from '../lib/time';
@@ -37,30 +38,12 @@ const OPERATORS: { value: AssertionOperator; label: string; needsValue: boolean 
   { value: 'GT', label: 'is greater than (>)', needsValue: true },
   { value: 'LTE', label: 'is at most (<=)', needsValue: true },
   { value: 'LT', label: 'is less than (<)', needsValue: true },
-  { value: 'EQ', label: 'equals', needsValue: true },
-  { value: 'NEQ', label: 'does not equal', needsValue: true },
+  { value: 'EQ', label: 'equals (==)', needsValue: true },
+  { value: 'NEQ', label: 'does not equal (!=)', needsValue: true },
   { value: 'EXISTS', label: 'exists', needsValue: false },
   { value: 'NOT_EMPTY', label: 'is not empty', needsValue: false },
   { value: 'AGE_LTE', label: 'is not older than (seconds)', needsValue: true },
 ];
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="mt-8">
-      <h2 className="mb-3 text-lg font-semibold text-slate-900">{title}</h2>
-      {children}
-    </section>
-  );
-}
 
 export default function MonitorDetailPage() {
   const { id } = useParams();
@@ -94,7 +77,7 @@ export default function MonitorDetailPage() {
     queryKey: ['results', monitorId],
     queryFn: () => listResults(monitorId),
     enabled: validId,
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   const assertionsQuery = useQuery({
@@ -125,7 +108,7 @@ export default function MonitorDetailPage() {
     queryKey: ['incidents', monitorId],
     queryFn: () => listIncidents(monitorId),
     enabled: validId,
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   const toggleMutation = useMutation({
@@ -255,11 +238,10 @@ export default function MonitorDetailPage() {
     }
   }
 
-  if (!validId || (monitorQuery.isError && monitorQuery.error instanceof ApiError
-      && monitorQuery.error.status === 404)) {
+  if (!validId || (monitorQuery.isError && monitorQuery.error instanceof ApiError && monitorQuery.error.status === 404)) {
     return (
-      <div className="mx-auto max-w-5xl p-8">
-        <p className="rounded-lg bg-white p-6 text-slate-700 shadow-sm">Monitor not found.</p>
+      <div className="min-h-screen bg-[#0B0F19] p-8 text-slate-100 font-mono">
+        <p className="rounded-xl bg-[#111827] border border-slate-800 p-6">Target monitor not found in registry.</p>
       </div>
     );
   }
@@ -273,6 +255,9 @@ export default function MonitorDetailPage() {
   const p50 = percentile(durations, 50);
   const p95 = percentile(durations, 95);
 
+  const uptimePercentage = results.length > 0 ? ((results.length - failedCount) / results.length) * 100 : 100;
+
+  // Chart data for AreaChart with gradient
   const chartData = [...results].reverse().map((r) => ({
     time: new Date(r.startedAt).toLocaleTimeString([], {
       hour: '2-digit',
@@ -280,117 +265,83 @@ export default function MonitorDetailPage() {
       second: '2-digit',
     }),
     durationMs: r.durationMs,
-    failedMs: r.status === 'FAILED' ? r.durationMs : null,
+    isFailed: r.status === 'FAILED',
   }));
 
   const selectedOp = OPERATORS.find((o) => o.value === ruleOp);
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      <div className="mb-4">
-        <Link to="/" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-          &larr; Back to all monitors
+    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-6 lg:p-8 space-y-6">
+      {/* Back Link */}
+      <div>
+        <Link to="/" className="inline-flex items-center gap-1.5 font-mono text-xs text-indigo-400 hover:text-indigo-300">
+          ← Back to Cluster Overview
         </Link>
       </div>
 
+      {/* Real-time Status Alert Banner */}
       {runMessage && (
         <div
           role="status"
-          className={`mb-4 flex items-center justify-between rounded-lg p-4 text-sm font-medium shadow-sm transition-all ${
+          className={`flex items-center justify-between rounded-xl p-4 font-mono text-xs font-bold border shadow-lg ${
             runMessage.isError
-              ? 'border border-red-200 bg-red-50 text-red-800'
-              : 'border border-green-200 bg-green-50 text-green-800'
+              ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
+              : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
           }`}
         >
           <span>{runMessage.text}</span>
-          <button
-            onClick={() => setRunMessage(null)}
-            className="text-xs opacity-75 hover:opacity-100"
-          >
-            Dismiss
-          </button>
+          <button onClick={() => setRunMessage(null)} className="opacity-75 hover:opacity-100">✕</button>
         </div>
       )}
 
-      {monitorQuery.isPending && <p className="text-slate-600">Loading...</p>}
-
-      {monitorQuery.isError && !monitor && (
-        <p role="alert" className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          Could not load this monitor.
-        </p>
-      )}
-
+      {/* MONITOR TELEMETRY HEADER CARD */}
       {monitor && (
-        <div className="rounded-lg bg-white p-6 shadow-sm">
+        <div className="rounded-xl bg-[#111827] border border-slate-800/80 p-6 shadow-2xl">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-900">{monitor.name}</h1>
-                {!monitor.enabled ? (
-                  <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-700">
-                    Paused
-                  </span>
-                ) : latest ? (
-                  latest.status === 'FAILED' ? (
-                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                      Failing
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                      Healthy
-                    </span>
-                  )
-                ) : (
-                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                    Waiting for first check
-                  </span>
-                )}
+              <div className="flex items-center gap-3">
+                <span className={`h-3 w-3 rounded-full ${!monitor.enabled ? 'bg-slate-500' : latest?.status === 'FAILED' ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400 shadow-[0_0_10px_#10b981]'}`} />
+                <h1 className="text-2xl font-black font-mono text-white tracking-tight">{monitor.name}</h1>
+                <span className={`rounded px-2.5 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider ${
+                  !monitor.enabled
+                    ? 'bg-slate-800 text-slate-400 border border-slate-700'
+                    : latest?.status === 'FAILED'
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                    : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                }`}>
+                  {!monitor.enabled ? 'STANDBY' : latest?.status === 'FAILED' ? 'CRITICAL FAILURE' : 'HEALTHY'}
+                </span>
               </div>
 
-              <p className="mt-1.5 break-all font-mono text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">{monitor.method}</span> {monitor.url}
+              <p className="mt-2 font-mono text-xs text-slate-400 break-all">
+                <span className="font-bold text-indigo-400">{monitor.method}</span> {monitor.url}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Every {monitor.intervalSeconds}s &bull; Timeout {monitor.timeoutMs} ms &bull; Expected HTTP {monitor.expectedStatus}
+              <p className="mt-1 font-mono text-[11px] text-slate-500">
+                POLL FREQUENCY: {monitor.intervalSeconds}s · TIMEOUT: {monitor.timeoutMs}ms · EXPECTED HTTP: {monitor.expectedStatus}
               </p>
             </div>
 
+            {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 disabled={runMutation.isPending}
                 onClick={() => runMutation.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-xs font-bold font-mono uppercase text-white shadow-lg shadow-emerald-600/30 transition-all hover:scale-105 disabled:opacity-50"
               >
-                {runMutation.isPending ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    Running...
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Run Check Now
-                  </>
-                )}
+                {runMutation.isPending ? 'PROBING...' : '⚡ RUN CHECK NOW'}
               </button>
 
               <button
                 onClick={() => setIsEditing(true)}
-                className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2 text-xs font-mono text-slate-200 transition-colors"
               >
-                Edit
+                Edit Target
               </button>
 
               <button
                 disabled={toggleMutation.isPending}
                 onClick={() => toggleMutation.mutate(monitor.enabled)}
-                className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3.5 py-2 text-xs font-mono text-slate-200 transition-colors disabled:opacity-50"
               >
                 {monitor.enabled ? 'Pause' : 'Resume'}
               </button>
@@ -398,7 +349,7 @@ export default function MonitorDetailPage() {
               <button
                 disabled={deleteMutation.isPending}
                 onClick={handleDelete}
-                className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/80 px-3.5 py-2 text-xs font-mono text-rose-400 transition-colors disabled:opacity-50"
               >
                 Delete
               </button>
@@ -407,78 +358,117 @@ export default function MonitorDetailPage() {
         </div>
       )}
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Checks loaded" value={String(results.length)} />
-        <StatCard label="Failed" value={String(failedCount)} />
-        <StatCard label="Latency p50" value={p50 === null ? '-' : `${p50} ms`} />
-        <StatCard label="Latency p95" value={p95 === null ? '-' : `${p95} ms`} />
-      </div>
-      <p className="mt-1 text-xs text-slate-500">
-        Percentiles are computed from the last {results.length} loaded checks only.
-      </p>
+      {/* METRIC GAUGES & STATS BAR */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        {/* Radial Gauge 1 */}
+        <div className="col-span-1 md:col-span-2">
+          <RadialGauge
+            value={uptimePercentage}
+            label="Uptime Availability"
+            sublabel={`${results.length} CHECKS`}
+            size={140}
+          />
+        </div>
 
-      <Section title="Latency Trend">
+        {/* Stat Cards */}
+        <div className="flex flex-col justify-center rounded-xl bg-[#111827] border border-slate-800/80 p-4 font-mono">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">CHECKS SAMPLED</span>
+          <span className="text-3xl font-black text-white mt-1">{results.length}</span>
+          <span className="text-[11px] text-slate-500 mt-1">Rolling window</span>
+        </div>
+
+        <div className="flex flex-col justify-center rounded-xl bg-[#111827] border border-slate-800/80 p-4 font-mono">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">FAILED RATIO</span>
+          <span className={`text-3xl font-black mt-1 ${failedCount > 0 ? 'text-rose-500' : 'text-emerald-400'}`}>
+            {failedCount}
+          </span>
+          <span className="text-[11px] text-slate-500 mt-1">{failedCount > 0 ? 'Violations' : 'Zero errors'}</span>
+        </div>
+
+        <div className="flex flex-col justify-center rounded-xl bg-[#111827] border border-slate-800/80 p-4 font-mono">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">LATENCY (P50)</span>
+          <span className="text-3xl font-black text-indigo-400 mt-1">{p50 === null ? '-' : `${p50} ms`}</span>
+          <span className="text-[11px] text-slate-500 mt-1">Median response</span>
+        </div>
+
+        <div className="flex flex-col justify-center rounded-xl bg-[#111827] border border-slate-800/80 p-4 font-mono">
+          <span className="text-[10px] font-bold text-slate-500 uppercase">LATENCY (P95)</span>
+          <span className="text-3xl font-black text-cyan-400 mt-1">{p95 === null ? '-' : `${p95} ms`}</span>
+          <span className="text-[11px] text-slate-500 mt-1">95th percentile</span>
+        </div>
+      </div>
+
+      {/* GRAFANA-STYLE GLOWING AREA CHART */}
+      <section className="rounded-xl bg-[#111827] border border-slate-800/80 p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2 font-mono">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span className="text-indigo-400">📈</span> Response Latency Telemetry (ms)
+          </span>
+          <span className="text-[11px] text-slate-500">REAL-TIME PROBE TIMELINE</span>
+        </div>
+
         {results.length === 0 ? (
-          <p className="rounded-lg bg-white p-6 text-slate-600 shadow-sm">No checks recorded yet.</p>
+          <div className="p-12 text-center text-slate-500 font-mono text-xs">No probe checks executed yet.</div>
         ) : (
-          <div className="rounded-lg bg-white p-5 shadow-sm">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="time" tick={{ fontSize: 11 }} minTickGap={32} />
-                  <YAxis tick={{ fontSize: 11 }} unit=" ms" width={64} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="durationMs"
-                    stroke="#4f46e5"
-                    strokeWidth={2}
-                    dot={false}
-                    name="Latency"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="failedMs"
-                    stroke="#dc2626"
-                    strokeWidth={0}
-                    dot={{ r: 4, fill: '#dc2626' }}
-                    name="Failed check"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="mt-2 text-xs text-slate-500">Red dots indicate checks that failed validation.</p>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="latencyGlow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
+                <XAxis dataKey="time" stroke="#64748B" tick={{ fontSize: 10, fill: '#64748B' }} />
+                <YAxis stroke="#64748B" unit=" ms" tick={{ fontSize: 10, fill: '#64748B' }} width={50} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0E1422',
+                    borderColor: '#1E293B',
+                    borderRadius: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    color: '#F1F5F9',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="durationMs"
+                  stroke="#10B981"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#latencyGlow)"
+                  name="Latency"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
-      </Section>
+      </section>
 
-      {/* Business Rules (Assertions) Section */}
-      <Section title="Business Rules (Assertions)">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs text-slate-500">
-            Rules catch silent API failures: the status code is 200 but response payload is invalid.
-          </p>
+      {/* BUSINESS RULES & ASSERTIONS */}
+      <section className="rounded-xl bg-[#111827] border border-slate-800/80 p-5 shadow-2xl">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2">
+          <span className="text-xs font-bold uppercase font-mono tracking-wider text-slate-400 flex items-center gap-2">
+            <span className="text-emerald-400">🛡️</span> Business Contract Assertions
+          </span>
           <button
             type="button"
-            onClick={() => setShowAddRule((prev) => !prev)}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline"
+            onClick={() => setShowAddRule((p) => !p)}
+            className="text-xs font-mono font-bold text-indigo-400 hover:text-indigo-300"
           >
-            {showAddRule ? 'Cancel' : '+ Add New Rule'}
+            {showAddRule ? 'Close Form' : '+ Add New Assertion'}
           </button>
         </div>
 
         {showAddRule && (
-          <form
-            onSubmit={handleSaveRule}
-            className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm space-y-3"
-          >
-            <h3 className="text-sm font-semibold text-slate-900">New Business Assertion</h3>
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
+          <form onSubmit={handleSaveRule} className="mb-4 rounded-lg bg-[#0E1422] border border-indigo-500/30 p-4 space-y-3 font-mono">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="block text-xs font-medium text-slate-700">JSON Path</label>
+                <label className="text-[10px] uppercase text-slate-400">JSON Path</label>
                 <input
-                  className="mt-1 w-full rounded border border-slate-300 p-2 text-sm bg-white"
+                  className="mt-1 w-full rounded bg-[#111827] border border-slate-700 p-2 text-xs text-white"
                   placeholder="$.data.stock"
                   value={rulePath}
                   onChange={(e) => setRulePath(e.target.value)}
@@ -486,24 +476,22 @@ export default function MonitorDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700">Operator</label>
+                <label className="text-[10px] uppercase text-slate-400">Operator</label>
                 <select
-                  className="mt-1 w-full rounded border border-slate-300 p-2 text-sm bg-white"
+                  className="mt-1 w-full rounded bg-[#111827] border border-slate-700 p-2 text-xs text-white"
                   value={ruleOp}
                   onChange={(e) => setRuleOp(e.target.value as AssertionOperator)}
                 >
                   {OPERATORS.map((op) => (
-                    <option key={op.value} value={op.value}>
-                      {op.label}
-                    </option>
+                    <option key={op.value} value={op.value}>{op.label}</option>
                   ))}
                 </select>
               </div>
               {selectedOp?.needsValue && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-700">Expected Value</label>
+                  <label className="text-[10px] uppercase text-slate-400">Expected Value</label>
                   <input
-                    className="mt-1 w-full rounded border border-slate-300 p-2 text-sm bg-white"
+                    className="mt-1 w-full rounded bg-[#111827] border border-slate-700 p-2 text-xs text-white"
                     placeholder="10"
                     value={ruleVal}
                     onChange={(e) => setRuleVal(e.target.value)}
@@ -513,20 +501,20 @@ export default function MonitorDetailPage() {
               )}
             </div>
 
-            {ruleError && <p className="text-xs text-red-700">{ruleError}</p>}
+            {ruleError && <p className="text-xs text-rose-400">{ruleError}</p>}
 
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={addRuleMutation.isPending}
-                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500"
               >
-                {addRuleMutation.isPending ? 'Saving...' : 'Save Rule'}
+                {addRuleMutation.isPending ? 'Saving...' : 'Save Assertion'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowAddRule(false)}
-                className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                className="rounded bg-slate-800 px-3 py-1.5 text-xs text-slate-400"
               >
                 Cancel
               </button>
@@ -535,209 +523,175 @@ export default function MonitorDetailPage() {
         )}
 
         {assertionsQuery.data && assertionsQuery.data.length === 0 && (
-          <p className="rounded-lg bg-white p-5 text-sm text-slate-600 shadow-sm">
-            No business rules configured. This monitor only validates the HTTP response status.
-          </p>
+          <p className="text-xs font-mono text-slate-500">No custom rules. Validating HTTP status code only.</p>
         )}
 
         {assertionsQuery.data && assertionsQuery.data.length > 0 && (
-          <ul className="divide-y rounded-lg bg-white shadow-sm">
+          <ul className="divide-y divide-slate-800/80">
             {assertionsQuery.data.map((a) => (
-              <li key={a.id} className="flex items-center justify-between p-3.5 font-mono text-sm text-slate-800">
+              <li key={a.id} className="flex items-center justify-between py-2.5 font-mono text-xs">
                 <div>
-                  <span className="font-semibold text-indigo-600">{a.path}</span> {a.operator}
-                  {a.expectedValue !== null && <span className="font-semibold"> {a.expectedValue}</span>}
+                  <span className="font-bold text-indigo-400">{a.path}</span> <span className="text-slate-400">{a.operator}</span>
+                  {a.expectedValue !== null && <span className="font-bold text-emerald-400"> {a.expectedValue}</span>}
                 </div>
                 <button
                   type="button"
-                  title="Delete rule"
                   disabled={deleteRuleMutation.isPending}
                   onClick={() => {
-                    if (window.confirm(`Delete rule "${a.path} ${a.operator}"?`)) {
-                      deleteRuleMutation.mutate(a.id);
-                    }
+                    if (window.confirm(`Delete rule "${a.path}"?`)) deleteRuleMutation.mutate(a.id);
                   }}
-                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  className="text-slate-500 hover:text-rose-400 transition-colors"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  Delete ✕
                 </button>
               </li>
             ))}
           </ul>
         )}
-      </Section>
+      </section>
 
-      {/* JSON Schema Validation Section */}
-      <Section title="JSON Schema Validation">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs text-slate-500">
-            Validate entire response payloads against a JSON Schema draft-07/2020-12 specification.
-          </p>
+      {/* JSON SCHEMA VALIDATOR */}
+      <section className="rounded-xl bg-[#111827] border border-slate-800/80 p-5 shadow-2xl font-mono">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span className="text-cyan-400">📄</span> JSON Schema Contract
+          </span>
           <button
             type="button"
-            onClick={() => setShowSchemaEditor((prev) => !prev)}
-            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline"
+            onClick={() => setShowSchemaEditor((p) => !p)}
+            className="text-xs font-bold text-cyan-400 hover:text-cyan-300"
           >
-            {showSchemaEditor ? 'Close' : schemaQuery.data ? 'Edit Schema' : '+ Add JSON Schema'}
+            {showSchemaEditor ? 'Close' : schemaQuery.data ? 'Edit Contract' : '+ Add JSON Schema'}
           </button>
         </div>
 
         {showSchemaEditor && (
-          <form
-            onSubmit={handleSaveSchema}
-            className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-3"
-          >
-            <label className="block text-xs font-medium text-slate-700">
-              JSON Schema Definition (JSON)
-            </label>
+          <form onSubmit={handleSaveSchema} className="space-y-3">
             <textarea
-              className="w-full h-48 rounded border border-slate-300 p-2.5 font-mono text-xs text-slate-800 bg-slate-50 focus:bg-white"
-              placeholder={`{\n  "type": "object",\n  "required": ["data"],\n  "properties": {\n    "data": { "type": "object" }\n  }\n}`}
+              className="w-full h-44 rounded-lg bg-[#0E1422] border border-slate-700 p-3 font-mono text-xs text-emerald-400 focus:outline-none focus:border-cyan-500"
+              placeholder={`{\n  "type": "object",\n  "required": ["data"]\n}`}
               value={schemaText}
               onChange={(e) => setSchemaText(e.target.value)}
               required
             />
-            {schemaError && <p className="text-xs text-red-700">{schemaError}</p>}
+            {schemaError && <p className="text-xs text-rose-400">{schemaError}</p>}
             <div className="flex gap-2">
               <button
                 type="submit"
                 disabled={saveSchemaMutation.isPending}
-                className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                className="rounded bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-500"
               >
-                {saveSchemaMutation.isPending ? 'Saving...' : 'Save Schema'}
+                Save Schema
               </button>
               {schemaQuery.data && (
                 <button
                   type="button"
-                  disabled={deleteSchemaMutation.isPending}
                   onClick={() => {
-                    if (window.confirm('Remove JSON Schema validation from this monitor?')) {
+                    if (window.confirm('Delete schema?')) {
                       deleteSchemaMutation.mutate();
                       setShowSchemaEditor(false);
                     }
                   }}
-                  className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                  className="rounded bg-rose-950 px-3 py-1.5 text-xs font-bold text-rose-400"
                 >
-                  Delete Schema
+                  Delete
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setShowSchemaEditor(false)}
-                className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
             </div>
           </form>
         )}
 
         {!showSchemaEditor && (
           schemaQuery.data ? (
-            <div className="rounded-lg bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
-                <span className="text-xs font-semibold uppercase tracking-wider text-green-700">
-                  Active Schema Contract
-                </span>
-                <span className="text-xs text-slate-400 font-mono">JSON Schema</span>
-              </div>
-              <pre className="max-h-48 overflow-y-auto font-mono text-xs text-slate-700 bg-slate-50 p-3 rounded">
-                {JSON.stringify(schemaQuery.data, null, 2)}
-              </pre>
-            </div>
+            <pre className="max-h-40 overflow-y-auto rounded-lg bg-[#0E1422] p-3 text-xs text-emerald-400 border border-slate-800">
+              {JSON.stringify(schemaQuery.data, null, 2)}
+            </pre>
           ) : (
-            <p className="rounded-lg bg-white p-5 text-sm text-slate-600 shadow-sm">
-              No JSON Schema configured. Responses will not be validated against a JSON contract.
-            </p>
+            <p className="text-xs text-slate-500">No JSON Schema configured. Responses will not be validated against a JSON contract.</p>
           )
         )}
-      </Section>
+      </section>
 
-      <Section title="Monitor Incidents">
+      {/* MONITOR INCIDENTS LOG */}
+      <section className="rounded-xl bg-[#111827] border border-slate-800/80 p-5 shadow-2xl font-mono">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span className="text-rose-400">🚨</span> Monitor Incidents Ledger
+          </span>
+          <span className="text-[11px] text-slate-500">
+            {incidentsQuery.data?.content.length ?? 0} INCIDENTS RECORDED
+          </span>
+        </div>
+
         {incidentsQuery.data && incidentsQuery.data.content.length === 0 && (
-          <p className="rounded-lg bg-white p-5 text-sm text-slate-600 shadow-sm">
-            No incidents recorded for this monitor.
-          </p>
+          <p className="text-xs text-slate-500">No incident events recorded for this target.</p>
         )}
-        {incidentsQuery.data && incidentsQuery.data.content.length > 0 && (
-          <ul className="space-y-2.5">
-            {incidentsQuery.data.content.map((incident) => (
-              <li key={incident.id} className="rounded-lg bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  {incident.status === 'OPEN' ? (
-                    <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-                      Open
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
-                      Resolved
-                    </span>
-                  )}
-                  <span className="text-sm font-semibold text-slate-900">
-                    {failureLabel(incident.failureCode)}
-                  </span>
-                  <span className="text-xs text-slate-500">
-                    {incident.failureCount} failed checks
-                  </span>
-                </div>
-                {incident.reason && (
-                  <p className="mt-2 break-words text-sm text-slate-700 bg-slate-50 p-2.5 rounded border border-slate-200 font-mono text-xs">
-                    {incident.reason}
-                  </p>
-                )}
-                <p className="mt-2 text-xs text-slate-500">
-                  Opened {formatDateTime(incident.openedAt)}
-                  {incident.resolvedAt && `, resolved ${formatDateTime(incident.resolvedAt)}`}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
 
-      <Section title="Recent Check History">
-        {resultsQuery.data && results.length > 0 && (
-          <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+        {incidentsQuery.data && incidentsQuery.data.content.length > 0 && (
+          <div className="space-y-2.5">
+            {incidentsQuery.data.content.map((inc) => (
+              <div key={inc.id} className="rounded-lg bg-[#0E1422] border border-slate-800 p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    inc.status === 'OPEN' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  }`}>
+                    {inc.status}
+                  </span>
+                  <span className="text-xs text-white font-bold">{failureLabel(inc.failureCode)}</span>
+                  <span className="text-[11px] text-slate-400">{inc.failureCount} failed checks</span>
+                </div>
+                <span className="text-[11px] text-slate-500">{formatDateTime(inc.openedAt)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* RECENT CHECK HISTORY TABLE */}
+      <section className="rounded-xl bg-[#111827] border border-slate-800/80 p-5 shadow-2xl font-mono">
+        <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <span className="text-indigo-400">⏱</span> Recent Execution History
+          </span>
+          <span className="text-[11px] text-slate-500">SHOWING LAST {results.length} CHECKS</span>
+        </div>
+
+        {results.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-slate-800 text-[10px] text-slate-500 uppercase">
                 <tr>
-                  <th className="px-4 py-3">Time</th>
-                  <th className="px-4 py-3">Result</th>
-                  <th className="px-4 py-3">HTTP</th>
-                  <th className="px-4 py-3">Latency</th>
-                  <th className="px-4 py-3">Details</th>
+                  <th className="py-2.5 px-3">Timestamp</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">HTTP</th>
+                  <th className="py-2.5 px-3">Latency</th>
+                  <th className="py-2.5 px-3">Trigger</th>
+                  <th className="py-2.5 px-3">Diagnostics</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-slate-800/60">
                 {results.map((r) => (
-                  <tr key={r.id} className="align-top hover:bg-slate-50/50">
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-600" title={formatDateTime(r.startedAt)}>
+                  <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="py-2.5 px-3 text-slate-400" title={formatDateTime(r.startedAt)}>
                       {timeAgo(r.startedAt)}
-                      {r.trigger === 'MANUAL' && (
-                        <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 font-medium">manual</span>
-                      )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="py-2.5 px-3">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                        r.status === 'FAILED' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      }`}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-slate-300 font-bold">{r.httpStatus ?? '-'}</td>
+                    <td className="py-2.5 px-3 text-indigo-400 font-bold">{r.durationMs} ms</td>
+                    <td className="py-2.5 px-3 text-slate-500 uppercase">{r.trigger}</td>
+                    <td className="py-2.5 px-3 text-slate-300">
                       {r.status === 'FAILED' ? (
-                        <span className="inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-                          Failed
+                        <span className="text-rose-400">
+                          {failureLabel(r.failureCode)}: {r.reason}
                         </span>
                       ) : (
-                        <span className="inline-block rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
-                          Passed
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700 font-mono text-xs">{r.httpStatus ?? '-'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-slate-700 font-mono text-xs">{r.durationMs} ms</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {r.status === 'FAILED' && (
-                        <>
-                          <span className="font-semibold text-slate-900">{failureLabel(r.failureCode)}</span>
-                          {r.reason && <span className="block mt-0.5 break-words text-slate-600 font-mono text-xs">{r.reason}</span>}
-                        </>
+                        <span className="text-slate-500">Passed</span>
                       )}
                     </td>
                   </tr>
@@ -746,12 +700,7 @@ export default function MonitorDetailPage() {
             </table>
           </div>
         )}
-        {resultsQuery.data && resultsQuery.data.totalElements > results.length && (
-          <p className="mt-2 text-xs text-slate-500">
-            Showing the latest {results.length} of {resultsQuery.data.totalElements} checks.
-          </p>
-        )}
-      </Section>
+      </section>
 
       {isEditing && monitor && (
         <EditMonitorModal

@@ -13,10 +13,10 @@ export default function IncidentsPage() {
 
   const statusParam = filter === 'ALL' ? undefined : filter;
 
-  const { data, isPending, isError, refetch } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: ['all-incidents', statusParam, page],
     queryFn: () => listAllIncidents(statusParam, page, 15),
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   const incidents = data?.content ?? [];
@@ -28,153 +28,152 @@ export default function IncidentsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#0B0F19] text-slate-100 p-6 lg:p-8 space-y-6">
+      {/* Header & Tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Incidents</h1>
-          <p className="text-sm text-slate-500">
-            Track active and historical failures across all your monitors.
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold tracking-widest text-rose-400 uppercase">
+              ▾ Alert Operations Center
+            </span>
+          </div>
+          <h1 className="text-2xl font-black tracking-tight text-white font-mono mt-0.5">
+            INCIDENT AUDIT LOG
+          </h1>
+          <p className="text-xs font-mono text-slate-500 mt-1">
+            Real-time state machine transitions and threshold alerts
           </p>
         </div>
 
-        <div className="flex rounded-lg bg-slate-200 p-1 text-sm font-medium">
+        {/* Filter Pills */}
+        <div className="flex rounded-lg bg-[#111827] border border-slate-800 p-1 text-xs font-mono">
           <button
-            className={`rounded-md px-3.5 py-1.5 transition-colors ${
+            className={`rounded-md px-3.5 py-1.5 transition-colors font-bold ${
               filter === 'OPEN'
-                ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                : 'text-slate-400 hover:text-white'
             }`}
             onClick={() => handleFilterChange('OPEN')}
           >
-            Open
+            ● OPEN ALERTS
           </button>
           <button
-            className={`rounded-md px-3.5 py-1.5 transition-colors ${
+            className={`rounded-md px-3.5 py-1.5 transition-colors font-bold ${
               filter === 'RESOLVED'
-                ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'text-slate-400 hover:text-white'
             }`}
             onClick={() => handleFilterChange('RESOLVED')}
           >
-            Resolved
+            ✓ RESOLVED
           </button>
           <button
-            className={`rounded-md px-3.5 py-1.5 transition-colors ${
+            className={`rounded-md px-3.5 py-1.5 transition-colors font-bold ${
               filter === 'ALL'
-                ? 'bg-white text-slate-900 shadow-sm font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-slate-800 text-white'
+                : 'text-slate-400 hover:text-white'
             }`}
             onClick={() => handleFilterChange('ALL')}
           >
-            All
+            ALL
           </button>
         </div>
       </div>
 
-      {isPending && <p className="mt-6 text-slate-600">Loading incidents...</p>}
-
-      {isError && (
-        <div
-          role="alert"
-          className="mt-6 rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800"
-        >
-          <p>Could not load incidents.</p>
-          <button className="mt-2 underline" onClick={() => refetch()}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {data && incidents.length === 0 && (
-        <div className="mt-6 rounded-lg bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+      {/* Incidents List */}
+      <section className="space-y-3">
+        {isPending && (
+          <div className="rounded-xl bg-[#111827] border border-slate-800 p-12 text-center text-slate-500 font-mono text-xs">
+            Querying active incident stream...
           </div>
-          <p className="mt-3 text-base font-semibold text-slate-800">
-            {filter === 'OPEN'
-              ? 'No active incidents'
-              : 'No incidents found'}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            {filter === 'OPEN'
-              ? 'All your monitored APIs are running smoothly!'
-              : 'There are no incident records matching this filter.'}
-          </p>
-        </div>
-      )}
+        )}
 
-      {incidents.length > 0 && (
-        <div className="mt-6 space-y-3">
-          {incidents.map((incident) => (
-            <div
-              key={incident.id}
-              className="rounded-lg bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  {incident.status === 'OPEN' ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
-                      Open
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-600" />
-                      Resolved
-                    </span>
-                  )}
-                  <span className="font-semibold text-slate-900">
-                    {failureLabel(incident.failureCode)}
-                  </span>
-                </div>
+        {isError && (
+          <div className="rounded-xl bg-rose-950/20 border border-rose-800 p-6 text-rose-400 font-mono text-xs">
+            Failed to query incident ledger from backend service.
+          </div>
+        )}
 
-                <Link
-                  to={`/monitors/${incident.monitorId}`}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline"
+        {!isPending && !isError && incidents.length === 0 && (
+          <div className="rounded-xl bg-[#111827] border border-slate-800 p-12 text-center text-slate-400 font-mono text-xs">
+            {filter === 'OPEN'
+              ? '✨ All systems optimal! No active incidents reported.'
+              : 'No incidents match the selected filter criteria.'}
+          </div>
+        )}
+
+        {incidents.map((inc) => (
+          <div
+            key={inc.id}
+            className={`rounded-xl bg-[#111827] border p-5 shadow-xl font-mono transition-all hover:border-slate-700 ${
+              inc.status === 'OPEN' ? 'border-rose-900/60 shadow-rose-950/20' : 'border-slate-800/80'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    inc.status === 'OPEN'
+                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  }`}
                 >
-                  View Monitor #{incident.monitorId} &rarr;
-                </Link>
+                  {inc.status}
+                </span>
+
+                <span className="font-bold text-white text-sm">
+                  {failureLabel(inc.failureCode)}
+                </span>
+
+                <span className="text-xs text-rose-400/90 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-900/40">
+                  {inc.failureCount} sequential failures
+                </span>
               </div>
 
-              {incident.reason && (
-                <p className="mt-2.5 break-words font-mono text-xs text-slate-700 bg-slate-50 p-3 rounded border border-slate-200">
-                  {incident.reason}
-                </p>
+              <Link
+                to={`/monitors/${inc.monitorId}`}
+                className="text-xs font-bold text-indigo-400 hover:text-indigo-300"
+              >
+                Inspect Target #{inc.monitorId} →
+              </Link>
+            </div>
+
+            {inc.reason && (
+              <p className="mt-3 rounded-lg bg-[#0E1422] border border-slate-800/90 p-3 text-xs text-rose-300/90 break-words">
+                {inc.reason}
+              </p>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center justify-between text-[11px] text-slate-500">
+              <span>Opened: {formatDateTime(inc.openedAt)}</span>
+              {inc.resolvedAt && (
+                <span className="text-emerald-400">Resolved: {formatDateTime(inc.resolvedAt)}</span>
               )}
-
-              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-                <span>Failed checks: <strong className="text-slate-700">{incident.failureCount}</strong></span>
-                <span>Opened: {formatDateTime(incident.openedAt)}</span>
-                {incident.resolvedAt && (
-                  <span>Resolved: {formatDateTime(incident.resolvedAt)}</span>
-                )}
-              </div>
             </div>
-          ))}
+          </div>
+        ))}
+      </section>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-between pt-2">
-              <button
-                disabled={page <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="rounded border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                &larr; Previous
-              </button>
-              <span className="text-xs text-slate-500">
-                Page {page + 1} of {totalPages}
-              </span>
-              <button
-                disabled={page + 1 >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded border border-slate-300 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Next &rarr;
-              </button>
-            </div>
-          )}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 font-mono text-xs text-slate-400">
+          <span>Page {page + 1} of {totalPages}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="rounded bg-slate-800 px-3 py-1.5 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="rounded bg-slate-800 px-3 py-1.5 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
